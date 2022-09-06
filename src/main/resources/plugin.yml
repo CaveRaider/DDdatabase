@@ -1,0 +1,7 @@
+name: DDdatabase
+version: '${project.version}'
+main: com.server.dddatabase.DDdatabase
+api-version: 1.19
+
+commands:
+  dd:

@@ -1,0 +1,112 @@
+package com.server.dddatabase.sql;
+
+import com.server.dddatabase.DDdatabase;
+import org.bukkit.entity.Player;
+
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.UUID;
+
+public class ExperienceGetter {
+
+    private DDdatabase plugin;
+
+    public ExperienceGetter(DDdatabase plugin) {
+        this.plugin = plugin;
+    }
+
+    public void createTable() {
+        PreparedStatement ps;
+        try {
+            ps = plugin.expSQL.getConnection().prepareStatement("CREATE TABLE IF NOT EXISTS levelsystem " +
+                    "(NAME VARCHAR(100), " +
+                    "UUID VARCHAR(100), " +
+                    "EXPERIENCE INT(100), " +
+                    "PRIMARY KEY (NAME))");
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void createPlayer(Player player) {
+        try {
+            UUID uuid = player.getUniqueId();
+            if (!exists(uuid)) {
+                PreparedStatement ps2 = plugin.expSQL.getConnection().prepareStatement("INSERT IGNORE INTO levelsystem (NAME,UUID,EXPERIENCE) VALUES (?,?,?)");
+                ps2.setString(1, player.getName());
+                ps2.setString(2, uuid.toString());
+                ps2.setInt(3, 0);
+                ps2.executeUpdate();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public boolean exists(UUID uuid) {
+        try {
+            PreparedStatement ps = plugin.expSQL.getConnection().prepareStatement("SELECT * FROM levelsystem WHERE UUID=?");
+            ps.setString(1, uuid.toString());
+            ResultSet results = ps.executeQuery();
+            return results.next();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public void addExperience(UUID uuid, int amount) {
+        try {
+            PreparedStatement ps = plugin.expSQL.getConnection().prepareStatement("UPDATE levelsystem SET EXPERIENCE=? WHERE UUID=?");
+            ps.setInt(1, getExperience(uuid) + amount);
+            ps.setString(2, uuid.toString());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void subtractExperience(UUID uuid, int amount) {
+        try {
+            PreparedStatement ps = plugin.expSQL.getConnection().prepareStatement("UPDATE levelsystem SET EXPERIENCE=? WHERE UUID=?");
+            if ((getExperience(uuid) - amount) < 1) ps.setInt(1, 0);
+            else ps.setInt(1, getExperience(uuid) - amount);
+            ps.setString(2, uuid.toString());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public int getExperience(UUID uuid) {
+        try {
+            PreparedStatement ps = plugin.expSQL.getConnection().prepareStatement("SELECT EXPERIENCE FROM levelsystem WHERE UUID=?");
+            ps.setString(1, uuid.toString());
+            ResultSet results = ps.executeQuery();
+            int experience = 0;
+            if (results.next()) {
+                experience = results.getInt("EXPERIENCE");
+                return experience;
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+
+    public void setExperience(UUID uuid, int amount) {
+        try {
+            PreparedStatement ps = plugin.expSQL.getConnection().prepareStatement("UPDATE levelsystem SET EXPERIENCE=? WHERE UUID=?");
+            ps.setInt(1, amount);
+            ps.setString(2, uuid.toString());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+}
