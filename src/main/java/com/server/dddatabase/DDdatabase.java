@@ -1,7 +1,9 @@
 package com.server.dddatabase;
 
+import com.server.dddatabase.levelcalc.LevelCalculator;
 import com.server.dddatabase.sql.ExperienceGetter;
 import com.server.dddatabase.sql.ExperienceSQL;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -12,11 +14,18 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.UUID;
 
 public final class DDdatabase extends JavaPlugin implements Listener {
 
     public ExperienceSQL expSQL;
     public ExperienceGetter expGetter;
+
+    public HashMap<UUID,Integer> experienceMap = new HashMap<>();
+    public List<String> nameList = new ArrayList<>();
 
     @Override
     public void onEnable() {
@@ -29,23 +38,66 @@ public final class DDdatabase extends JavaPlugin implements Listener {
             this.getLogger().warning("Inventory database connection failed!");
         }
         if (expSQL.isConnected()) {
+
+            //if connection is successful
             this.getLogger().info("Inventory database connection successful!");
             expGetter.createTable();
             this.getServer().getPluginManager().registerEvents(this, this);
+            this.experienceMap = expGetter.getMap();
+            for (UUID u : experienceMap.keySet()) {
+                nameList.add(expGetter.getUsername(u));
+            }
+            expSQL.disconnect();
         }
-
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            /*
+             * We register the EventListener here, when PlaceholderAPI is installed.
+             * Since all events are in the main class (this class), we simply use "this"
+             */
+            Bukkit.getPluginManager().registerEvents(this, this);
+            new LevelCalculator(this).register();
+        } else {
+            /*
+             * We inform about the fact that PlaceholderAPI isn't installed and then
+             * disable this plugin to prevent issues.
+             */
+            getLogger().info("Could not find PlaceholderAPI! This plugin is required.");
+            Bukkit.getPluginManager().disablePlugin(this);
+        }
     }
 
     @Override
     public void onDisable() {
         // Plugin shutdown logic
-        expSQL.disconnect();
+        this.expSQL = new ExperienceSQL();
+        this.expGetter = new ExperienceGetter(this);
+        try {
+            expSQL.connect();
+        } catch (SQLException | ClassNotFoundException e) {
+            this.getLogger().warning("Inventory database connection failed!");
+        }
+        if (expSQL.isConnected()) {
 
+            //if connection successful
+            this.getLogger().info("Inventory database connection successful!");
+            expGetter.createTable();
+            int c = 0;
+            for (UUID u : experienceMap.keySet()) {
+                expGetter.createPlayer(u, this.nameList.get(c));
+                expGetter.setExperience(u, experienceMap.get(u));
+                c++;
+            }
+            expSQL.disconnect();
+        }
     }
+
 
     @EventHandler
     public void join(PlayerJoinEvent e) {
-        expGetter.createPlayer(e.getPlayer());
+        //create player in expmap
+        if (experienceMap.containsKey(e.getPlayer().getUniqueId())) return;
+        experienceMap.put(e.getPlayer().getUniqueId(), 0);
+        nameList.add(e.getPlayer().getName());
     }
 
     @Override
@@ -63,7 +115,7 @@ public final class DDdatabase extends JavaPlugin implements Listener {
 
         //get exp command
         if (args[0].equalsIgnoreCase("getexp")) {
-            int exp = expGetter.getExperience(player.getUniqueId());
+            int exp = experienceMap.get(player.getUniqueId());
             player.sendMessage("You have " + Integer.toString(exp) + " experince points!");
             return true;
         }
@@ -87,25 +139,26 @@ public final class DDdatabase extends JavaPlugin implements Listener {
 
         //set exp command
         if (args[0].equalsIgnoreCase("setexp")) {
-            expGetter.setExperience(player.getUniqueId(), amount);
-            player.sendMessage("You now have " + Integer.toString(expGetter.getExperience(player.getUniqueId())) + " experience points!");
+            experienceMap.put(player.getUniqueId(), amount);
+            player.sendMessage("You now have " + Integer.toString(experienceMap.get(player.getUniqueId())) + " experience points!");
             return true;
         }
 
         //add exp command
         if (args[0].equalsIgnoreCase("addexp")) {
-            expGetter.addExperience(player.getUniqueId(), amount);
-            player.sendMessage("You now have " + Integer.toString(expGetter.getExperience(player.getUniqueId())) + " experience points!");
+            experienceMap.put(player.getUniqueId(), amount + experienceMap.get(player.getUniqueId()));
+            player.sendMessage("You now have " + Integer.toString(experienceMap.get(player.getUniqueId())) + " experience points!");
             return true;
         }
 
         //subtract exp command
         if (args[0].equalsIgnoreCase("subexp")) {
-            expGetter.subtractExperience(player.getUniqueId(), amount);
-            player.sendMessage("You now have " + Integer.toString(expGetter.getExperience(player.getUniqueId())) + " experience points!");
+            int newExp = experienceMap.get(player.getUniqueId()) - amount;
+            if (newExp < 0) newExp = 0;
+            experienceMap.put(player.getUniqueId(), newExp);
+            player.sendMessage("You now have " + Integer.toString(experienceMap.get(player.getUniqueId())) + " experience points!");
             return true;
         }
-
         return false;
     }
 
